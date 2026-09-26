@@ -138,3 +138,91 @@ class DiffOut(BaseModel):
     new_event_cutoff_id: str | None
     student_changes: list[dict[str, Any]]
     students_affected: int
+
+
+# ---------------------------------------------------------------------------
+# 学时证明
+# ---------------------------------------------------------------------------
+
+
+class CertificateRequestIn(BaseModel):
+    student_id: str = Field(..., min_length=1, max_length=128)
+    purpose: str = Field(..., min_length=1, max_length=256)
+    applicant_id: str = Field(..., min_length=1, max_length=128)
+    expires_at: datetime | None = None
+    ttl_days: int | None = Field(default=None, gt=0, le=3650)
+    supersedes_id: str | None = Field(default=None, max_length=128)
+
+    @model_validator(mode="after")
+    def _check_expiry_inputs(self) -> "CertificateRequestIn":
+        if self.expires_at is not None and self.ttl_days is not None:
+            raise ValueError("provide either expires_at or ttl_days, not both")
+        if self.expires_at is not None and self.expires_at.tzinfo is None:
+            raise ValueError("expires_at must be timezone-aware (RFC 3339)")
+        return self
+
+
+class CertificateDecisionIn(BaseModel):
+    approver_id: str = Field(..., min_length=1, max_length=128)
+    reason: str = Field(default="", max_length=512)
+
+
+class CertificateRejectIn(BaseModel):
+    approver_id: str = Field(..., min_length=1, max_length=128)
+    reason: str = Field(..., min_length=1, max_length=512)
+
+
+class CertificateRevokeIn(BaseModel):
+    approver_id: str = Field(..., min_length=1, max_length=128)
+    reason: str = Field(..., min_length=1, max_length=512)
+
+
+class CertificateOut(BaseModel):
+    certificate_id: str
+    plan_version: str
+    freeze_id: str
+    student_id: str
+    purpose: str
+    applicant_id: str
+    status: str
+    supersedes_id: str | None
+    created_at: str
+    issued_at: str | None
+    expires_at: str | None
+    approver_id: str | None
+    decision_reason: str | None
+    revoked_at: str | None
+    revoked_reason: str | None
+    expired: bool
+
+
+class CertificateAuditOut(BaseModel):
+    sequence: int
+    action: str
+    actor_id: str
+    detail: str
+    created_at: str
+
+
+class CertificateDetailOut(CertificateOut):
+    audit: list[CertificateAuditOut] = Field(default_factory=list)
+
+
+class VerifyIn(BaseModel):
+    package: dict[str, Any] | None = None
+    certificate_id: str | None = None
+
+    @model_validator(mode="after")
+    def _require_one(self) -> "VerifyIn":
+        if self.package is None and not self.certificate_id:
+            raise ValueError("either package or certificate_id is required")
+        return self
+
+
+class VerifyOut(BaseModel):
+    certificate_id: str | None
+    valid: bool
+    checks: dict[str, Any]
+    reasons: list[str]
+    expires_at: str | None = None
+    registry_status: str | None = None
