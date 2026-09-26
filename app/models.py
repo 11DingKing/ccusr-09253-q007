@@ -69,3 +69,73 @@ class Freeze(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=_utcnow, server_default=func.now()
     )
+
+
+class Attestation(Base):
+    """学时证明：申请记录与签发后的不可变数据包。"""
+
+    __tablename__ = "attestations"
+
+    attestation_id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    request_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    plan_version: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    freeze_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    student_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    purpose: Mapped[str] = mapped_column(String(256), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending")
+
+    # 签发后写入；package 一经写入永不变更（纠错只能另发替代证明）。
+    package: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    checksum: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    snapshot_checksum: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+    requested_by: Mapped[str] = mapped_column(String(128), nullable=False)
+    decided_by: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    decision_note: Mapped[str | None] = mapped_column(String(512), nullable=True)
+
+    valid_from: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    issued_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    rejected_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    revoked_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    revoke_reason: Mapped[str | None] = mapped_column(String(512), nullable=True)
+
+    # 替代链：本证明替代哪一份旧证明；旧证明进入 superseded 终态。
+    supersedes_id: Mapped[str | None] = mapped_column(
+        String(128), nullable=True, index=True
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=_utcnow,
+        server_default=func.now(),
+        onupdate=_utcnow,
+    )
+
+    __table_args__ = (
+        UniqueConstraint("request_id", name="uq_attestations_request_id"),
+        Index(
+            "ix_attestations_plan_freeze_student",
+            "plan_version",
+            "freeze_id",
+            "student_id",
+        ),
+        CheckConstraint(
+            "status in ('pending', 'issued', 'rejected', 'revoked', 'superseded')",
+            name="ck_attestations_status",
+        ),
+    )

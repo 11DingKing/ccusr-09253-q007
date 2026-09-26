@@ -138,3 +138,63 @@ class DiffOut(BaseModel):
     new_event_cutoff_id: str | None
     student_changes: list[dict[str, Any]]
     students_affected: int
+
+
+class AttestationApplyIn(BaseModel):
+    freeze_id: str = Field(..., min_length=1, max_length=128)
+    student_id: str = Field(..., min_length=1, max_length=128)
+    purpose: str = Field(..., min_length=1, max_length=256)
+    request_id: str = Field(..., min_length=1, max_length=128)
+
+
+class AttestationApproveIn(BaseModel):
+    valid_for_days: int | None = Field(default=None, gt=0, le=3650)
+    expires_at: datetime | None = None
+    valid_from: datetime | None = None
+    supersedes_id: str | None = Field(default=None, max_length=128)
+    note: str = Field(default="", max_length=512)
+
+    @model_validator(mode="after")
+    def _check_expiry_inputs(self) -> "AttestationApproveIn":
+        if (
+            self.expires_at is not None
+            and self.expires_at.tzinfo is None
+        ):
+            raise ValueError("expires_at 必须带时区")
+        if self.valid_from is not None and self.valid_from.tzinfo is None:
+            raise ValueError("valid_from 必须带时区")
+        return self
+
+
+class AttestationRejectIn(BaseModel):
+    note: str = Field(..., min_length=1, max_length=512)
+
+
+class AttestationRevokeIn(BaseModel):
+    reason: str = Field(..., min_length=1, max_length=512)
+
+
+class AttestationOut(BaseModel):
+    attestation_id: str
+    request_id: str
+    plan_version: str
+    freeze_id: str
+    student_id: str
+    purpose: str
+    status: str
+    requested_by: str
+    decided_by: str | None
+    decision_note: str | None
+    valid_from: str | None
+    expires_at: str | None
+    issued_at: str | None
+    revoked_at: str | None
+    revoke_reason: str | None
+    supersedes_id: str | None
+    checksum: str | None
+    snapshot_checksum: str | None
+    created_at: str
+
+
+class AttestationVerifyIn(BaseModel):
+    package: dict[str, Any]
